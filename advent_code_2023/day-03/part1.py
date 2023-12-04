@@ -19,13 +19,30 @@ class PotentialPartNumber:
     y_index: int
 
 
-def is_valid_coordinate(coordinate: tuple[int, int], max_x: int, max_y: int) -> bool:
+def _is_valid_coordinate(coordinate: tuple[int, int], max_x: int, max_y: int) -> bool:
     if coordinate[0] < 0 or coordinate[1] < 0:
         return False
     if coordinate[0] >= max_x or coordinate[1] >= max_y:
         return False
 
     return True
+
+
+def generate_valid_adjacent_coordinates(symbol: PartSymbol, max_x: int, max_y: int):
+    return [
+        coordinate
+        for coordinate in [
+            (symbol.x_index - 1, symbol.y_index - 1),  # up-left
+            (symbol.x_index, symbol.y_index - 1),  # up-up
+            (symbol.x_index + 1, symbol.y_index - 1),  # up-right
+            (symbol.x_index - 1, symbol.y_index),  # left
+            (symbol.x_index + 1, symbol.y_index),  # right
+            (symbol.x_index - 1, symbol.y_index + 1),  # down-left
+            (symbol.x_index, symbol.y_index + 1),  # down-down
+            (symbol.x_index + 1, symbol.y_index + 1),  # down-right
+        ]
+        if _is_valid_coordinate(coordinate, max_x, max_y)
+    ]
 
 
 potential_part_number_lookup_map: dict[int, dict[int, PotentialPartNumber]] = {}
@@ -61,21 +78,11 @@ for line in utils.yield_lines_from_path(INPUT_PATH):
 
 confirmed_part_numbers: set[int] = []
 
+
 for symbol in part_symbols:
-    valid_adjacent_coordinates = [
-        coordinate
-        for coordinate in [
-            (symbol.x_index - 1, symbol.y_index - 1),  # up-left
-            (symbol.x_index, symbol.y_index - 1),  # up-up
-            (symbol.x_index + 1, symbol.y_index - 1),  # up-right
-            (symbol.x_index - 1, symbol.y_index),  # left
-            (symbol.x_index + 1, symbol.y_index),  # right
-            (symbol.x_index - 1, symbol.y_index + 1),  # down-left
-            (symbol.x_index, symbol.y_index + 1),  # down-down
-            (symbol.x_index + 1, symbol.y_index + 1),  # down-right
-        ]
-        if is_valid_coordinate(coordinate, max_x, y_index)
-    ]
+    valid_adjacent_coordinates = generate_valid_adjacent_coordinates(
+        symbol, max_x, y_index
+    )
     potential_part_numbers_for_symbol = [
         potential_part_number_lookup_map.get(coordinate[1], {}).get(coordinate[0])
         for coordinate in valid_adjacent_coordinates
