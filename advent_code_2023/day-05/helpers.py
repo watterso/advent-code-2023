@@ -1,5 +1,5 @@
-from collections import defaultdict
 from dataclasses import dataclass
+from itertools import chain
 import os.path
 import typing
 
@@ -9,6 +9,13 @@ class MappingDefinition:
     source_range_start: int
     destination_range_start: int
     range_length: int
+
+    def reverse(self) -> typing.Self:
+        return MappingDefinition(
+            source_range_start=self.destination_range_start,
+            destination_range_start=self.source_range_start,
+            range_length=self.range_length,
+        )
 
 
 class FrozenLazyIntToIntMapping:
@@ -30,6 +37,32 @@ class FrozenLazyIntToIntMapping:
                 ) + definition.destination_range_start
 
         return key
+
+    def get_reverse_mapping(self):
+        return FrozenLazyIntToIntMapping(
+            [
+                MappingDefinition(
+                    m.destination_range_start, m.source_range_start, m.range_length
+                )
+                for m in self.mapping_defs
+            ]
+        )
+
+    def __iter__(self):
+        return chain(
+            range(0, self.mapping_defs[0].source_range_start),
+            *[
+                range(
+                    defintion.source_range_start,
+                    defintion.source_range_start + defintion.range_length,
+                )
+                for defintion in self.mapping_defs
+            ],
+        )
+
+    def pretty_print(self):
+        for i in self:
+            print(f"{i} -> {self[i]}")
 
 
 @dataclass(frozen=True)
@@ -89,7 +122,7 @@ def _parse_triplet_into_mapping_definition(triplet_str) -> MappingDefinition:
     )
 
 
-def parse_file(path: str) -> ParsedAlmanac:
+def _parse_file(path: str) -> list:
     seeds: list[int] = []
     seed_to_soil: list[MappingDefinition] = []
     soil_to_fertilizer: list[MappingDefinition] = []
@@ -151,14 +184,20 @@ def parse_file(path: str) -> ParsedAlmanac:
                 _read_until_next_blank_line(input_file)[1:],
             )
         )
+        return (
+            seeds,
+            seed_to_soil,
+            soil_to_fertilizer,
+            fertilizer_to_water,
+            water_to_light,
+            light_to_temperature,
+            temperature_to_humidity,
+            humidity_to_location,
+        )
 
+
+def parse_file(path: str) -> ParsedAlmanac:
+    parsed_tuple = _parse_file(path)
     return ParsedAlmanac(
-        seeds,
-        FrozenLazyIntToIntMapping(seed_to_soil),
-        FrozenLazyIntToIntMapping(soil_to_fertilizer),
-        FrozenLazyIntToIntMapping(fertilizer_to_water),
-        FrozenLazyIntToIntMapping(water_to_light),
-        FrozenLazyIntToIntMapping(light_to_temperature),
-        FrozenLazyIntToIntMapping(temperature_to_humidity),
-        FrozenLazyIntToIntMapping(humidity_to_location),
+        parsed_tuple[0], *[FrozenLazyIntToIntMapping(l) for l in parsed_tuple[1:]]
     )
