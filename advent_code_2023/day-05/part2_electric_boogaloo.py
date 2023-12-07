@@ -29,49 +29,6 @@ def fill_in_the_start_and_any_gaps_in_mappings(
     return filled_mapping_list
 
 
-def get_relevant_mappings_for_source_range1(
-    source_range: range, mappings: list[helpers.MappingDefinition]
-) -> list[helpers.MappingDefinition]:
-    last_covered_index = source_range.start
-    relevant_mappings = []
-    mappings = sorted(mappings)
-    # print(f"Input Mappings: {mappings}")
-    for mapping in mappings:
-        if source_range.stop < mapping.source_range_start:
-            break
-        if last_covered_index < mapping.source_range_start:
-            relevant_mappings.append(
-                helpers.MappingDefinition(
-                    last_covered_index,
-                    last_covered_index,
-                    mapping.source_range_start - last_covered_index,
-                )
-            )
-        relevant_mappings.append(
-            helpers.MappingDefinition(
-                mapping.source_range_start,
-                mapping.destination_range_start,
-                min(
-                    mapping.range_length,
-                    (source_range.stop - mapping.source_range_start),
-                ),
-            )
-        )
-        last_covered_index = mapping.source_range_start + mapping.range_length
-        if last_covered_index >= source_range.stop:
-            break
-    if last_covered_index < source_range.stop:
-        relevant_mappings.append(
-            helpers.MappingDefinition(
-                last_covered_index,
-                last_covered_index,
-                source_range.stop - last_covered_index,
-            )
-        )
-    # print(f"Source Range: {source_range} | Relevant Mappings: {relevant_mappings}")
-    return relevant_mappings
-
-
 def get_relevant_mappings_for_source_range(
     source_range: range, mappings: list[helpers.MappingDefinition]
 ) -> list[helpers.MappingDefinition]:
@@ -319,12 +276,6 @@ for l_to_h in location_to_humidity:
                             if seed_range_is_overlap_with_input_seed_ranges(
                                 seed_range, input_seed_ranges
                             ):
-                                # tmp_seed_range = []
-                                # for in_seed in input_seed_ranges:
-                                #   tmp_seed_range.extend(
-                                #       set(seed_range).intersection(set(in_seed))
-                                #   )
-                                # target_seed_range.extend(tmp_seed_range)
                                 if False:
                                     print(
                                         " -> ".join(
