@@ -29,67 +29,6 @@ def fill_in_the_start_and_any_gaps_in_mappings(
     return filled_mapping_list
 
 
-def get_relevant_mappings_for_source_range(
-    source_range: range, mappings: list[helpers.MappingDefinition]
-) -> list[helpers.MappingDefinition]:
-    last_covered_index = source_range.start
-    relevant_mappings = []
-    mappings = sorted(mappings)
-    # print(f"Input Mappings: {mappings}")
-    for mapping in mappings:
-        mapping_source_range = range(
-            mapping.source_range_start,
-            mapping.source_range_start + mapping.range_length,
-        )
-        if ranges_overlap(source_range, mapping_source_range):
-            delta_of_starts = max((source_range.start - mapping.source_range_start), 0)
-            relevant_mappings.append(
-                helpers.MappingDefinition(
-                    max(mapping.source_range_start, source_range.start),
-                    mapping.destination_range_start + delta_of_starts,
-                    min(
-                        mapping.range_length - delta_of_starts,
-                        (
-                            source_range.stop
-                            - max(mapping.source_range_start, source_range.start)
-                        ),
-                    ),
-                )
-            )
-        last_covered_index = mapping.source_range_start + mapping.range_length
-
-    if (
-        relevant_mappings
-        and relevant_mappings[0].source_range_start > source_range.start
-    ):
-        relevant_mappings = [
-            helpers.MappingDefinition(
-                source_range.start,
-                source_range.start,
-                relevant_mappings[0].source_range_start - source_range.start,
-            )
-        ] + relevant_mappings
-    if last_covered_index < source_range.stop:
-        relevant_mappings.append(
-            helpers.MappingDefinition(
-                last_covered_index,
-                last_covered_index,
-                source_range.stop - last_covered_index,
-            )
-        )
-    if not relevant_mappings:
-        relevant_mappings = [
-            helpers.MappingDefinition(
-                source_range.start,
-                source_range.start,
-                source_range.stop - source_range.start,
-            )
-        ]
-    # print(f"Source Range: {source_range} | Relevant Mappings: {relevant_mappings}")
-    # print()
-    return relevant_mappings
-
-
 def convert_seed_list_to_seed_ranges(seeds: list[int]) -> list[range]:
     seed_ranges = []
     for i in range(0, len(seeds), 2):
@@ -119,9 +58,13 @@ def ranges_overlap(l: range, r: range) -> bool:
     )
 
 
-def seed_range_is_overlap_with_input_seed_ranges(
-    seed_range: range, input_ranges: list[range]
+def seed_mapping_is_overlap_with_input_seed_ranges(
+    seed_mapping: helpers.MappingDefinition, input_ranges: list[range]
 ) -> bool:
+    seed_range = range(
+        seed_mapping.destination_range_start,
+        seed_mapping.destination_range_start + seed_mapping.range_length,
+    )
     # print(f"{seed_range} ? {input_ranges}")
     for in_range in input_ranges:
         if ranges_overlap(seed_range, in_range):
@@ -144,6 +87,84 @@ def get_exact_overlapping_ranges(
     return overlapping_ranges
 
 
+def _should_prepend_list_to_match_source_range_start(
+    sorted_mapping_list: list[helpers.MappingDefinition], source_range: range
+) -> bool:
+    return (
+        sorted_mapping_list
+        and sorted_mapping_list[0].source_range_start > source_range.start
+    )
+
+
+def get_relevant_mappings_for_source_range(
+    source_range: range, mappings: list[helpers.MappingDefinition]
+) -> list[helpers.MappingDefinition]:
+    last_covered_index = source_range.start
+    relevant_mappings = []
+    mappings = sorted(mappings)
+    # print(f"Input Mappings: {mappings}")
+    for mapping in mappings:
+        if ranges_overlap(source_range, mapping.to_source_range()):
+            delta_of_starts = max((source_range.start - mapping.source_range_start), 0)
+            relevant_mappings.append(
+                helpers.MappingDefinition(
+                    max(mapping.source_range_start, source_range.start),
+                    mapping.destination_range_start + delta_of_starts,
+                    min(
+                        mapping.range_length - delta_of_starts,
+                        (
+                            source_range.stop
+                            - max(mapping.source_range_start, source_range.start)
+                        ),
+                    ),
+                )
+            )
+        last_covered_index = mapping.source_range_start + mapping.range_length
+
+    if _should_prepend_list_to_match_source_range_start(
+        relevant_mappings, source_range
+    ):
+        relevant_mappings = [
+            helpers.MappingDefinition(
+                source_range.start,
+                source_range.start,
+                relevant_mappings[0].source_range_start - source_range.start,
+            )
+        ] + relevant_mappings
+    if last_covered_index < source_range.stop:
+        # _should_append_list_to_match_source_range_stop
+        relevant_mappings.append(
+            helpers.MappingDefinition(
+                last_covered_index,
+                last_covered_index,
+                source_range.stop - last_covered_index,
+            )
+        )
+    if not relevant_mappings:
+        # If none of the mappings overlapped with the source range,
+        # that means the entire source range maps transparently throught to destination
+        relevant_mappings = [
+            helpers.MappingDefinition(
+                source_range.start,
+                source_range.start,
+                source_range.stop - source_range.start,
+            )
+        ]
+    # print(f"Source Range: {source_range} | Relevant Mappings: {relevant_mappings}")
+    # print()
+    return relevant_mappings
+
+
+def get_relevant_reversed_mappings(
+    source_mapping: helpers.MappingDefinition,
+    forwards_mappings: list[helpers.MappingDefinition],
+) -> list[helpers.MappingDefinition]:
+    mappings_reversed = [mapping.reverse() for mapping in forwards_mappings]
+    return get_relevant_mappings_for_source_range(
+        source_mapping.to_destination_range(), mappings_reversed
+    )
+
+
 (
     seeds,
     seed_to_soil,
@@ -156,155 +177,59 @@ def get_exact_overlapping_ranges(
 ) = helpers._parse_file(INPUT_PATH)
 
 input_seed_ranges = convert_seed_list_to_seed_ranges(seeds)
-# print(input_seed_ranges)
-
 target_seed_range = None
 
-location_to_humidity = [mapping.reverse() for mapping in humidity_to_location]
-location_to_humidity = fill_in_the_start_and_any_gaps_in_mappings(location_to_humidity)
-for l_to_h in location_to_humidity:
+location_to_humidity_mappings = [mapping.reverse() for mapping in humidity_to_location]
+location_to_humidity_mappings = fill_in_the_start_and_any_gaps_in_mappings(
+    location_to_humidity_mappings
+)
+for l_to_h in location_to_humidity_mappings:
     if target_seed_range:
         break
-    location_range = range(
-        l_to_h.source_range_start, l_to_h.source_range_start + l_to_h.range_length
-    )
-    humidity_range = range(
-        l_to_h.destination_range_start,
-        l_to_h.destination_range_start + l_to_h.range_length,
-    )
-
-    humidity_to_temperature = [mapping.reverse() for mapping in temperature_to_humidity]
-    relevant_humidity_to_temperature_mappings = get_relevant_mappings_for_source_range(
-        humidity_range, humidity_to_temperature
-    )
-    for h_to_t in relevant_humidity_to_temperature_mappings:
+    for h_to_t in get_relevant_reversed_mappings(
+        l_to_h,
+        temperature_to_humidity,
+    ):
         if target_seed_range:
             break
-        temperature_range = range(
-            h_to_t.destination_range_start,
-            h_to_t.destination_range_start + h_to_t.range_length,
-        )
-
-        temperature_to_light = [mapping.reverse() for mapping in light_to_temperature]
-        relevant_temperature_to_light_mappings = get_relevant_mappings_for_source_range(
-            temperature_range, temperature_to_light
-        )
-        for t_to_l in relevant_temperature_to_light_mappings:
+        for t_to_l in get_relevant_reversed_mappings(
+            h_to_t,
+            light_to_temperature,
+        ):
             if target_seed_range:
                 break
-            light_range = range(
-                t_to_l.destination_range_start,
-                t_to_l.destination_range_start + t_to_l.range_length,
-            )
-
-            light_to_water = [mapping.reverse() for mapping in water_to_light]
-            relevant_light_to_water_mappings = get_relevant_mappings_for_source_range(
-                light_range, light_to_water
-            )
-            for l_to_w in relevant_light_to_water_mappings:
+            for l_to_w in get_relevant_reversed_mappings(t_to_l, water_to_light):
                 if target_seed_range:
                     break
-                water_range = range(
-                    l_to_w.destination_range_start,
-                    l_to_w.destination_range_start + l_to_w.range_length,
-                )
-
-                water_to_fertilizer = [
-                    mapping.reverse() for mapping in fertilizer_to_water
-                ]
-                relevant_water_to_fertilizer_mappings = (
-                    get_relevant_mappings_for_source_range(
-                        water_range, water_to_fertilizer
-                    )
-                )
-                for w_to_f in relevant_water_to_fertilizer_mappings:
+                for w_to_f in get_relevant_reversed_mappings(
+                    l_to_w, fertilizer_to_water
+                ):
                     if target_seed_range:
                         break
-                    fertilizer_range = range(
-                        w_to_f.destination_range_start,
-                        w_to_f.destination_range_start + w_to_f.range_length,
-                    )
-
-                    fertilizer_to_soil = [
-                        mapping.reverse() for mapping in soil_to_fertilizer
-                    ]
-                    relevant_fertilizer_to_soil_mappings = (
-                        get_relevant_mappings_for_source_range(
-                            fertilizer_range, fertilizer_to_soil
-                        )
-                    )
-                    for f_to_s in relevant_fertilizer_to_soil_mappings:
+                    for f_to_s in get_relevant_reversed_mappings(
+                        w_to_f, soil_to_fertilizer
+                    ):
                         if target_seed_range:
                             break
-                        soil_range = range(
-                            f_to_s.destination_range_start,
-                            f_to_s.destination_range_start + f_to_s.range_length,
-                        )
-
-                        soil_to_seed = [mapping.reverse() for mapping in seed_to_soil]
-                        relevant_soil_to_seed_mappings = (
-                            get_relevant_mappings_for_source_range(
-                                soil_range, soil_to_seed
-                            )
-                        )
-                        for s_to_s in relevant_soil_to_seed_mappings:
+                        for s_to_s in get_relevant_reversed_mappings(
+                            f_to_s, seed_to_soil
+                        ):
                             if target_seed_range:
                                 break
-                            seed_range = range(
-                                s_to_s.destination_range_start,
-                                s_to_s.destination_range_start + s_to_s.range_length,
-                            )
-
-                            if False:
-                                print(
-                                    " -> ".join(
-                                        map(
-                                            str,
-                                            [
-                                                location_range,
-                                                humidity_range,
-                                                temperature_range,
-                                                light_range,
-                                                water_range,
-                                                fertilizer_range,
-                                                soil_range,
-                                                seed_range,
-                                            ],
-                                        )
-                                    )
-                                )
-                            if seed_range_is_overlap_with_input_seed_ranges(
-                                seed_range, input_seed_ranges
+                            if seed_mapping_is_overlap_with_input_seed_ranges(
+                                s_to_s, input_seed_ranges
                             ):
-                                if False:
-                                    print(
-                                        " -> ".join(
-                                            map(
-                                                str,
-                                                [
-                                                    location_range,
-                                                    humidity_range,
-                                                    temperature_range,
-                                                    light_range,
-                                                    water_range,
-                                                    fertilizer_range,
-                                                    soil_range,
-                                                    seed_range,
-                                                ],
-                                            )
-                                        )
-                                    )
-                                target_seed_range = seed_range
+                                target_seed_range = s_to_s.to_destination_range()
 
 almanac = helpers.parse_file(INPUT_PATH)
 locations = []
 valid_seeds = []
-print(f"Target Seed Range: {target_seed_range}")
+# print(f"Target Seed Range: {target_seed_range}")
 refined_target_range = get_exact_overlapping_ranges(
     target_seed_range, input_seed_ranges
 )
-print(f"Input Seeds: {input_seed_ranges}")
-print(f"Refined Target Seed Range: {refined_target_range}")
+# print(f"Input Seeds: {input_seed_ranges}")
+# print(f"Refined Target Seed Range: {refined_target_range}")
 for seed in chain(*refined_target_range):
     if is_number_in_any_of_these_ranges(seed, input_seed_ranges):
         valid_seeds.append(seed)
@@ -312,5 +237,5 @@ for seed in chain(*refined_target_range):
     if seed % 1000000 == 0:
         print(f"{seed/1000000} Million")
 print("====================== ATTENTION =======================")
-print(f"{len(valid_seeds)} items, {len(set(valid_seeds))} uniques")
+# print(f"{len(valid_seeds)} items, {len(set(valid_seeds))} uniques")
 print(f"The lowest location is: {sorted(locations)[0]}")

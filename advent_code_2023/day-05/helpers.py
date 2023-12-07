@@ -17,6 +17,17 @@ class MappingDefinition:
             range_length=self.range_length,
         )
 
+    def to_source_range(self) -> range:
+        return range(
+            self.source_range_start, self.source_range_start + self.range_length
+        )
+
+    def to_destination_range(self) -> range:
+        return range(
+            self.destination_range_start,
+            self.destination_range_start + self.range_length,
+        )
+
 
 class FrozenLazyIntToIntMapping:
     mapping_defs: list[MappingDefinition]
