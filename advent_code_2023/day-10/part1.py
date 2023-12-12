@@ -15,6 +15,16 @@ COORD_DELTAS_TO_GET_CONNECTED_COORDS = {
     "F": ((1, 0), (0, 1)),
     "S": ((0, -1), (0, 1), (-1, 0), (1, 0)),
 }
+DELTA_COMPATIBLE_SYMBOL = {
+    (0, -1): "|F7S",
+    (0, 1): "|LJS",
+    (-1, 0): "-LFS",
+    (1, 0): "-J7S",
+}
+
+
+def get_delta_of_points(l: tuple[int, int], r: tuple[int, int]) -> tuple[int, int]:
+    return (l[0] - r[0], l[1] - r[1])
 
 
 def _pretty_print_map(parsed_map: dict[int, dict[int, str]]) -> None:
@@ -86,14 +96,20 @@ def identify_loop(
         return path_so_far
     # print(f"{target_symbol} -> ", end="")
     new_path_so_far = path_so_far.copy() + [target_point]
+    potential_next_points = get_potential_next_points(
+        target_point,
+        target_symbol,
+        path_so_far[-1],
+        maxes,
+    )
+    compatible_next_points = filter(
+        lambda p: parsed_map[p[1]][p[0]]
+        in DELTA_COMPATIBLE_SYMBOL[get_delta_of_points(p, target_point)],
+        potential_next_points,
+    )
     potential_paths = [
         identify_loop(p, new_path_so_far, parsed_map, starting_point, maxes)
-        for p in get_potential_next_points(
-            target_point,
-            target_symbol,
-            path_so_far[-1],
-            maxes,
-        )
+        for p in compatible_next_points
     ]
     return list(filter(None, potential_paths))[0]
 
@@ -117,6 +133,7 @@ for p in get_potential_next_points(
     )
     if potential_path:
         # print(len(potential_path), end=" @ ")
+        print(len(potential_path))
         # _pretty_print_path(potential_path)
         potential_paths.append(potential_path)
 
